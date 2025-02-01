@@ -185,3 +185,12 @@ body {
     left: 100px;
     transform: translate(-50%, -50%);
   }
+  #body{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    margin: 70px;
+    background-color: #d8f3dc;
+    overflow: auto;
+  }
