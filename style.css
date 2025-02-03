@@ -191,6 +191,7 @@ body {
     align-items: center;
     height: 100vh;
     margin: 70px;
-    background-color: #d8f3dc;
+    background-image: url('forest-stones_54887-13.avif');
+    background-size: cover;
     overflow: auto;
   }
