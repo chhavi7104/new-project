@@ -1,37 +1,27 @@
 # ratandmazepuzzelgame-
-Rat and Maze Game
-Welcome to Rat and Maze — a classic puzzle game where you help a rat navigate through a maze to reach the cheese!
+# 🐭 Rat and Maze Game
 
-🧀 Gameplay
-The maze is a 2D grid of paths (0) and walls (1).
+Help the rat find its way through the maze to reach the cheese! This is a simple pathfinding game using a 2D grid and basic backtracking logic.
 
-The rat starts at the top-left corner (0, 0).
+## 📋 Overview
 
-The goal is to reach the bottom-right corner (or another designated end point).
+- The maze is a grid made up of:
+  - `0` — open path
+  - `1` — wall
+- The rat starts at the top-left corner `(0, 0)`
+- The goal is to reach the bottom-right corner (or a target position)
+- Allowed movements: **Up**, **Down**, **Left**, **Right**
 
-Moves allowed: Up, Down, Left, Right (no diagonal moves).
+## 🚀 Features
 
-The rat can only move through open paths (0).
-
-🕹️ Features
-Randomly generated or pre-designed mazes.
-
-Simple console or graphical interface (depending on version).
-
-Displays the successful path (if exists).
-
-Optional: Solve using Backtracking Algorithm.
-
-📦 Installation
-Clone the repository:
+- Console or GUI-based interface
+- Solves maze using backtracking
+- Displays the solution path
+- Optional: Custom or randomly generated mazes
 
 
-git clone 
-cd ratandmazepuzzelgame
-Run the game:
 
-
-✨ Future Improvements
+## ✨ Future Improvements
 Add multiple difficulty levels.
 
 Introduce a timer for solving.
