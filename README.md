@@ -3,7 +3,7 @@
 
 Help the rat find its way through the maze to reach the cheese! This is a simple pathfinding game using a 2D grid and basic backtracking logic.
 
-## 📋 Overview
+## 📋 Overview 
 
 - The maze is a grid made up of:
   - `0` — open path
