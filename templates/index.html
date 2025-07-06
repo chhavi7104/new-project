@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Floor Plan 3D - Complete Solution</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        #firstPersonView { width: 100%; height: 100%; }
+        #topDownView {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 300px;
+            border: 2px solid white;
+            z-index: 100;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 200;
+        }
+        #error {
+            color: #ff6b6b;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="firstPersonView"></div>
+        <div id="topDownView"></div>
+        <div id="info">WASD to move | Mouse to look | Click to lock controls</div>
+        <div id="loading">
+            <h3>Loading 3D Model</h3>
+            <progress value="0" max="100"></progress>
+            <div id="status">Initializing...</div>
+            <div id="error"></div>
+        </div>
+    </div>
+
+    <!-- Three.js from CDN with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/utils/BufferGeometryUtils.js"></script>
+
+    <script>
+        // ========================
+        // INITIALIZATION
+        // ========================
+        let scene, fpCamera, topDownCamera, fpControls, orbitControls;
+        let firstPersonRenderer, topDownRenderer;
+        const moveSpeed = 0.2;
+        const keys = {};
+
+        // UI Elements
+        const statusElement = document.getElementById('status');
+        const errorElement = document.getElementById('error');
+        const progressBar = document.querySelector('progress');
+
+        function updateStatus(text, progress) {
+            statusElement.textContent = text;
+            progressBar.value = progress;
+        }
+
+        function showError(message) {
+            errorElement.innerHTML = `Error: ${message}<br>Check browser console (F12) for details`;
+            console.error(message);
+        }
+
+        // ========================
+        // SCENE SETUP
+        // ========================
+        function initScene() {
+            try {
+                // 1. Verify Three.js loaded
+                if (!THREE) throw new Error("Three.js failed to load");
+                
+                updateStatus("Creating scene...", 10);
+                
+                // 2. Create scene and renderers
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x87CEEB);
+                
+                firstPersonRenderer = new THREE.WebGLRenderer({ antialias: true });
+                firstPersonRenderer.setSize(window.innerWidth, window.innerHeight);
+                firstPersonRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                document.getElementById('firstPersonView').appendChild(firstPersonRenderer.domElement);
+                
+                topDownRenderer = new THREE.WebGLRenderer({ antialias: true });
+                topDownRenderer.setSize(300, 300);
+                topDownRenderer.setPixelRatio(1);
+                document.getElementById('topDownView').appendChild(topDownRenderer.domElement);
+                
+                // 3. Create cameras
+                fpCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+                fpCamera.position.y = 1.6;
+                
+                topDownCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 1, 1000);
+                topDownCamera.position.set(0, 50, 0);
+                topDownCamera.lookAt(0, 0, 0);
+                
+                // 4. Add lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 10);
+                scene.add(directionalLight);
+                
+                // 5. Add floor
+                const floorGeometry = new THREE.PlaneGeometry(100, 100);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xcccccc, 
+                    roughness: 0.8 
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                scene.add(floor);
+                
+                updateStatus("Scene ready", 20);
+                return true;
+                
+            } catch (err) {
+                showError(`Scene initialization failed: ${err.message}`);
+                return false;
+            }
+        }
+
+        // ========================
+        // MODEL LOADING
+        // ========================
+        async function loadModel() {
+            if (!initScene()) return;
+            
+            try {
+                updateStatus("Loading floor plan...", 30);
+                
+                // 1. Load image
+                const img = await loadImage('floorplan.png');
+                updateStatus("Processing image...", 50);
+                
+                // 2. Process image
+                const { walls, doors, windows } = await processImage(img);
+                
+                // 3. Create walls
+                updateStatus("Creating walls...", 70);
+                await createWalls(walls, doors, windows);
+                
+                // 4. Set up controls
+                setupControls();
+                updateStatus("Finalizing...", 90);
+                
+                // 5. Start animation
+                animate();
+                updateStatus("Ready!", 100);
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                    }, 500);
+                }, 1000);
+                
+            } catch (err) {
+                showError(`Model loading failed: ${err.message}`);
+            }
+        }
+
+        // ========================
+        // HELPER FUNCTIONS
+        // ========================
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+                img.src = src;
+            });
+        }
+
+        function processImage(img) {
+            return new Promise((resolve) => {
+                setTimeout(() => { // Use timeout to prevent UI freeze
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        const walls = [], doors = [], windows = [];
+                        const step = 5; // Process every 5th pixel
+                        
+                        for (let y = 0; y < canvas.height; y += step) {
+                            for (let x = 0; x < canvas.width; x += step) {
+                                const pixel = ctx.getImageData(x, y, 1, 1).data;
+                                
+                                // Wall (black)
+                                if (pixel[0] < 50 && pixel[1] < 50 && pixel[2] < 50) {
+                                    // Door (greenish)
+                                    if (pixel[1] > 100 && pixel[0] < 100 && pixel[2] < 100) {
+                                        doors.push({x, y});
+                                    } 
+                                    // Window (blueish)
+                                    else if (pixel[2] > 150 && pixel[0] < 100 && pixel[1] < 100) {
+                                        windows.push({x, y});
+                                    } 
+                                    // Regular wall
+                                    else {
+                                        walls.push({x, y});
+                                    }
+                                }
+                            }
+                        }
+                        
+                        resolve({ 
+                            walls, 
+                            doors, 
+                            windows,
+                            width: canvas.width,
+                            height: canvas.height
+                        });
+                        
+                    } catch (err) {
+                        showError(`Image processing error: ${err.message}`);
+                        resolve({ walls: [], doors: [], windows: [] });
+                    }
+                }, 0);
+            });
+        }
+
+        function createWalls(walls, doors, windows) {
+            return new Promise((resolve) => {
+                try {
+                    const wallMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0xf5deb3, 
+                        roughness: 0.7 
+                    });
+                    const doorMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x8B4513, 
+                        roughness: 0.5 
+                    });
+                    const windowMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0xADD8E6,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    
+                    // Create walls group
+                    const wallsGroup = new THREE.Group();
+                    
+                    // Function to create wall segments
+                    function createWallSegments(points, material, heightScale = 1) {
+                        if (points.length === 0) return;
+                        
+                        const wallHeight = 3 * heightScale;
+                        const wallThickness = 0.2;
+                        const scale = 0.1;
+                        const geometry = new THREE.BoxGeometry(wallThickness, wallHeight, wallThickness);
+                        
+                        points.forEach(point => {
+                            const wall = new THREE.Mesh(geometry, material);
+                            wall.position.set(
+                                (point.x - points.width/2) * scale,
+                                wallHeight/2,
+                                (point.y - points.height/2) * scale
+                            );
+                            wallsGroup.add(wall);
+                        });
+                    }
+                    
+                    // Create all wall types
+                    createWallSegments(walls, wallMaterial);
+                    createWallSegments(doors, doorMaterial);
+                    createWallSegments(windows, windowMaterial, 0.7);
+                    
+                    scene.add(wallsGroup);
+                    resolve();
+                    
+                } catch (err) {
+                    showError(`Wall creation failed: ${err.message}`);
+                    resolve();
+                }
+            });
+        }
+
+        function setupControls() {
+            try {
+                fpControls = new THREE.PointerLockControls(fpCamera, document.body);
+                orbitControls = new THREE.OrbitControls(topDownCamera, topDownRenderer.domElement);
+                orbitControls.enableRotate = false;
+                
+                document.addEventListener('click', (e) => {
+                    if (e.target.id !== 'topDownView') {
+                        fpControls.lock();
+                    }
+                });
+                
+                document.addEventListener('keydown', (e) => keys[e.code] = true);
+                document.addEventListener('keyup', (e) => keys[e.code] = false);
+                
+            } catch (err) {
+                showError(`Controls setup failed: ${err.message}`);
+            }
+        }
+
+        // ========================
+        // ANIMATION LOOP
+        // ========================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Movement controls
+            if (fpControls && fpControls.isLocked) {
+                if (keys['KeyW']) fpControls.moveForward(moveSpeed);
+                if (keys['KeyS']) fpControls.moveForward(-moveSpeed);
+                if (keys['KeyA']) fpControls.moveRight(-moveSpeed);
+                if (keys['KeyD']) fpControls.moveRight(moveSpeed);
+            }
+            
+            if (orbitControls) orbitControls.update();
+            
+            // Render both views
+            firstPersonRenderer.render(scene, fpCamera);
+            topDownRenderer.render(scene, topDownCamera);
+        }
+
+        // ========================
+        // WINDOW RESIZE HANDLER
+        // ========================
+        window.addEventListener('resize', () => {
+            if (fpCamera && firstPersonRenderer) {
+                fpCamera.aspect = window.innerWidth / window.innerHeight;
+                fpCamera.updateProjectionMatrix();
+                firstPersonRenderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // ========================
+        // START APPLICATION
+        // ========================
+        loadModel();
+    </script>
+</body>
+</html>
