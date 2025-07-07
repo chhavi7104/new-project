@@ -112,7 +112,7 @@
                 
                 // 3. Create cameras
                 fpCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-                fpCamera.position.y = 1.6;
+                fpCamera.position.set(0, 1.6, 10); // Start position
                 
                 topDownCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 1, 1000);
                 topDownCamera.position.set(0, 50, 0);
@@ -158,11 +158,16 @@
                 updateStatus("Processing image...", 50);
                 
                 // 2. Process image
-                const { walls, doors, windows } = await processImage(img);
+                const { walls, doors, windows, width, height } = await processImage(img);
+                
+                console.log('Image dimensions:', width, height);
+                console.log('Walls count:', walls.length);
+                console.log('Doors count:', doors.length);
+                console.log('Windows count:', windows.length);
                 
                 // 3. Create walls
                 updateStatus("Creating walls...", 70);
-                await createWalls(walls, doors, windows);
+                await createWalls(walls, doors, windows, width, height);
                 
                 // 4. Set up controls
                 setupControls();
@@ -196,111 +201,153 @@
             });
         }
 
-        function processImage(img) {
-            return new Promise((resolve) => {
-                setTimeout(() => { // Use timeout to prevent UI freeze
-                    try {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-                        
-                        const walls = [], doors = [], windows = [];
-                        const step = 5; // Process every 5th pixel
-                        
-                        for (let y = 0; y < canvas.height; y += step) {
-                            for (let x = 0; x < canvas.width; x += step) {
-                                const pixel = ctx.getImageData(x, y, 1, 1).data;
-                                
-                                // Wall (black)
-                                if (pixel[0] < 50 && pixel[1] < 50 && pixel[2] < 50) {
-                                    // Door (greenish)
-                                    if (pixel[1] > 100 && pixel[0] < 100 && pixel[2] < 100) {
-                                        doors.push({x, y});
-                                    } 
-                                    // Window (blueish)
-                                    else if (pixel[2] > 150 && pixel[0] < 100 && pixel[1] < 100) {
-                                        windows.push({x, y});
-                                    } 
-                                    // Regular wall
-                                    else {
-                                        walls.push({x, y});
-                                    }
-                                }
-                            }
+       function processImage(img) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                // Get all wall pixels first
+                const wallPixels = [];
+                const step = 1; // Check every pixel for better wall detection
+                
+                for (let y = 0; y < canvas.height; y += step) {
+                    for (let x = 0; x < canvas.width; x += step) {
+                        const pixel = ctx.getImageData(x, y, 1, 1).data;
+                        if (pixel[0] < 50 && pixel[1] < 50 && pixel[2] < 50) {
+                            wallPixels.push({x, y});
                         }
-                        
-                        resolve({ 
-                            walls, 
-                            doors, 
-                            windows,
-                            width: canvas.width,
-                            height: canvas.height
-                        });
-                        
-                    } catch (err) {
-                        showError(`Image processing error: ${err.message}`);
-                        resolve({ walls: [], doors: [], windows: [] });
                     }
-                }, 0);
-            });
-        }
-
-        function createWalls(walls, doors, windows) {
-            return new Promise((resolve) => {
-                try {
-                    const wallMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0xf5deb3, 
-                        roughness: 0.7 
-                    });
-                    const doorMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0x8B4513, 
-                        roughness: 0.5 
-                    });
-                    const windowMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0xADD8E6,
-                        transparent: true,
-                        opacity: 0.7
-                    });
-                    
-                    // Create walls group
-                    const wallsGroup = new THREE.Group();
-                    
-                    // Function to create wall segments
-                    function createWallSegments(points, material, heightScale = 1) {
-                        if (points.length === 0) return;
-                        
-                        const wallHeight = 3 * heightScale;
-                        const wallThickness = 0.2;
-                        const scale = 0.1;
-                        const geometry = new THREE.BoxGeometry(wallThickness, wallHeight, wallThickness);
-                        
-                        points.forEach(point => {
-                            const wall = new THREE.Mesh(geometry, material);
-                            wall.position.set(
-                                (point.x - points.width/2) * scale,
-                                wallHeight/2,
-                                (point.y - points.height/2) * scale
-                            );
-                            wallsGroup.add(wall);
-                        });
-                    }
-                    
-                    // Create all wall types
-                    createWallSegments(walls, wallMaterial);
-                    createWallSegments(doors, doorMaterial);
-                    createWallSegments(windows, windowMaterial, 0.7);
-                    
-                    scene.add(wallsGroup);
-                    resolve();
-                    
-                } catch (err) {
-                    showError(`Wall creation failed: ${err.message}`);
-                    resolve();
                 }
-            });
+                
+                // Group connected pixels into walls
+                const walls = groupConnectedPixels(wallPixels, canvas.width, canvas.height);
+                const doors = []; // You'll need to implement similar grouping for doors
+                const windows = []; // And windows
+                
+                resolve({ 
+                    walls, 
+                    doors, 
+                    windows,
+                    width: canvas.width,
+                    height: canvas.height
+                });
+                
+            } catch (err) {
+                showError(`Image processing error: ${err.message}`);
+                resolve({ walls: [], doors: [], windows: [], width: 0, height: 0 });
+            }
+        }, 0);
+    });
+}
+
+function groupConnectedPixels(pixels, imgWidth, imgHeight) {
+    // This is a simplified version - you might want to implement a more robust
+    // flood fill or connected components algorithm for better results
+    
+    const groups = [];
+    const visited = new Set();
+    const grid = new Array(imgWidth * imgHeight).fill(0);
+    
+    // Mark wall pixels
+    pixels.forEach(p => {
+        grid[p.y * imgWidth + p.x] = 1;
+    });
+    
+    // Find horizontal wall segments
+    for (let y = 0; y < imgHeight; y++) {
+        let startX = -1;
+        for (let x = 0; x < imgWidth; x++) {
+            if (grid[y * imgWidth + x] === 1) {
+                if (startX === -1) startX = x;
+            } else {
+                if (startX !== -1 && x - startX > 2) { // Minimum wall length
+                    groups.push({
+                        x1: startX,
+                        x2: x-1,
+                        y1: y,
+                        y2: y,
+                        horizontal: true
+                    });
+                }
+                startX = -1;
+            }
         }
+    }
+    
+    // Find vertical wall segments
+    for (let x = 0; x < imgWidth; x++) {
+        let startY = -1;
+        for (let y = 0; y < imgHeight; y++) {
+            if (grid[y * imgWidth + x] === 1) {
+                if (startY === -1) startY = y;
+            } else {
+                if (startY !== -1 && y - startY > 2) { // Minimum wall length
+                    groups.push({
+                        x1: x,
+                        x2: x,
+                        y1: startY,
+                        y2: y-1,
+                        horizontal: false
+                    });
+                }
+                startY = -1;
+            }
+        }
+    }
+    
+    return groups;
+}
+
+function createWalls(walls, doors, windows, imgWidth, imgHeight) {
+    return new Promise((resolve) => {
+        try {
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xf5deb3, 
+                roughness: 0.7 
+            });
+            
+            const wallsGroup = new THREE.Group();
+            const scale = 0.1;
+            const wallHeight = 3;
+            const wallThickness = 0.2;
+            
+            walls.forEach(wall => {
+                let width, depth;
+                let centerX, centerZ;
+                
+                if (wall.horizontal) {
+                    width = (wall.x2 - wall.x1 + 1) * scale;
+                    depth = wallThickness;
+                    centerX = ((wall.x1 + wall.x2) / 2 - imgWidth/2) * scale;
+                    centerZ = (wall.y1 - imgHeight/2) * scale;
+                } else {
+                    width = wallThickness;
+                    depth = (wall.y2 - wall.y1 + 1) * scale;
+                    centerX = (wall.x1 - imgWidth/2) * scale;
+                    centerZ = ((wall.y1 + wall.y2) / 2 - imgHeight/2) * scale;
+                }
+                
+                const geometry = new THREE.BoxGeometry(width, wallHeight, depth);
+                const mesh = new THREE.Mesh(geometry, wallMaterial);
+                mesh.position.set(centerX, wallHeight/2, centerZ);
+                wallsGroup.add(mesh);
+            });
+            
+            scene.add(wallsGroup);
+            console.log('Solid walls created');
+            resolve();
+            
+        } catch (err) {
+            showError(`Wall creation failed: ${err.message}`);
+            resolve();
+        }
+    });
+}
 
         function setupControls() {
             try {
