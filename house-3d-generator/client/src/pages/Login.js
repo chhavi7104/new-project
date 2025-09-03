@@ -57,48 +57,60 @@ const Login = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+  
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    });
     
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      // Check if we got a response at all
-      if (!response) {
-        throw new Error('No response from server');
-      }
-      
-      // Check if we got an HTML error page instead of JSON
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.indexOf('application/json') === -1) {
-        // Server returned HTML (probably an error page)
-        console.warn('Server returned HTML, using default credentials');
-        handleDefaultCredentials(); // Fixed: using the renamed function
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        login(data.user, data.token);
-        navigate('/dashboard');
+    const contentType = response.headers.get('content-type');
+    
+    if (response.ok) {
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        
+        // Check for the actual structure you're receiving
+        if (data.token && data._id) {
+          // Create user object from response data
+          const userData = {
+            _id: data._id,
+            username: data.username,
+            email: data.email
+          };
+          
+          login(userData, data.token);
+          navigate('/dashboard', { replace: true });
+        } else {
+          setError('Invalid response structure from server');
+        }
       } else {
-        setError(data.error || 'Login failed');
+        const text = await response.text();
+        setError(`Server returned unexpected format: ${text}`);
       }
-    } catch (error) {
-      console.warn('Network error, using default credentials:', error.message);
-      handleDefaultCredentials(); // Fixed: using the renamed function
-    } finally {
-      setLoading(false);
+    } else {
+      // Handle error responses
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        setError(errorData.error || 'Login failed');
+      } else {
+        const errorText = await response.text();
+        setError(errorText || `Login failed with status: ${response.status}`);
+      }
     }
-  };
+  } catch (error) {
+    console.error('Login error:', error);
+    setError('Network error. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Pre-fill form with default credentials for development
   const fillDefaultCredentials = () => {

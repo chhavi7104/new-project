@@ -50,11 +50,11 @@ const register = async (req, res, next) => {
 // @desc    Authenticate a user
 // @route   POST /api/auth/login
 // @access  Public
-const login = async (req, res, next) => {
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check for user email
+    // Check for user
     const user = await User.findOne({ email }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
@@ -68,7 +68,8 @@ const login = async (req, res, next) => {
       res.status(401).json({ error: 'Invalid credentials' });
     }
   } catch (error) {
-    next(error);
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error during login' });
   }
 };
 

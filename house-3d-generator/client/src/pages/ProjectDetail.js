@@ -9,7 +9,9 @@ const ProjectDetail = () => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  
   useEffect(() => {
+    
     fetchProject();
   }, [id]);
 

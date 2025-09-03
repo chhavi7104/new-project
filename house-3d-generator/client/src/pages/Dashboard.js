@@ -1,6 +1,5 @@
 // client/src/pages/Dashboard.js
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import ImageUpload from '../components/ImageUpload';
 import ProjectList from '../components/ProjectList';
 import './Dashboard.css';
