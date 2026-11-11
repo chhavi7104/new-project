@@ -19,15 +19,8 @@ Transform 2D floor plans into interactive 3D house models with ease. This projec
 
 ---
 
-## 📸 Demo
 
-> Add screenshots or GIFs here
 
-| 2D Floor Plan | Generated 3D Model |
-|---------------|-------------------|
-| *(Screenshot)* | *(Screenshot)* |
-
----
 
 ## 🛠️ Tech Stack
 
